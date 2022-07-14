@@ -1323,11 +1323,13 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			unsigned long pgoff, unsigned long *populate,
 			struct list_head *uf)
 {
-	struct mm_struct *mm = current->mm;
+	// current 表示当进程
+	struct mm_struct *mm = current->mm; //获取该进程的memory descriptor
 	int pkey = 0;
 
 	*populate = 0;
 
+	/* 函数对传入的参数进行一系列检查, 假如任一参数出错，都会返回一个errno */
 	if (!len)
 		return -EINVAL;
 
@@ -1340,26 +1342,31 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	if ((prot & PROT_READ) && (current->personality & READ_IMPLIES_EXEC))
 		if (!(file && path_noexec(&file->f_path)))
 			prot |= PROT_EXEC;
-
+	/* 假如没有设置MAP_FIXED标志，且addr小于mmap_min_addr, 因为可以修改addr, 
+	   所以就需要将addr设为mmap_min_addr的页对齐后的地址 */
 	if (!(flags & MAP_FIXED))
 		addr = round_hint_to_min(addr);
 
 	/* Careful about overflows.. */
-	len = PAGE_ALIGN(len);
+	/* PAGE_ALIGN(addr)  就是  (((addr)+PAGE_SIZE-1)&PAGE_MASK) */
+	len = PAGE_ALIGN(len);   // 进行页大小对齐
 	if (!len)
 		return -ENOMEM;
 
 	/* offset overflow? */
+	/* 正常应该是 大与等于的 如果小于说明溢出了 */
 	if ((pgoff + (len >> PAGE_SHIFT)) < pgoff)
 		return -EOVERFLOW;
 
 	/* Too many mappings? */
+	/* 判断该进程的地址空间的虚拟区间数量是否超过了限制 */
 	if (mm->map_count > sysctl_max_map_count)
 		return -ENOMEM;
 
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
 	 */
+	/* get_unmapped_area从当前进程的用户空间获取一个未被映射区间的起始地址 */
 	addr = get_unmapped_area(file, addr, len, pgoff, flags);
 	if (offset_in_page(addr))
 		return addr;
