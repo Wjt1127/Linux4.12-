@@ -834,33 +834,33 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 
 struct file {
 	union {
-		struct llist_node	fu_llist;
-		struct rcu_head 	fu_rcuhead;
+		struct llist_node	fu_llist;  // 文件对象的链表指针
+		struct rcu_head 	fu_rcuhead; //RCU(Read-Copy Update)是Linux 2.6内核中新的锁机制
 	} f_u;
-	struct path		f_path;
+	struct path		f_path;   //包含dentry和mnt两个成员，用于确定文件路径
 	struct inode		*f_inode;	/* cached value */
-	const struct file_operations	*f_op;
+	const struct file_operations	*f_op; //与该文件相关联的操作函数
 
 	/*
 	 * Protects f_ep_links, f_flags.
 	 * Must not be taken from IRQ context.
 	 */
 	spinlock_t		f_lock;
-	atomic_long_t		f_count;
-	unsigned int 		f_flags;
-	fmode_t			f_mode;
-	struct mutex		f_pos_lock;
-	loff_t			f_pos;
-	struct fown_struct	f_owner;
+	atomic_long_t		f_count; // 文件的引用计数(有多少进程打开该文件)
+	unsigned int 		f_flags; // 对应于open时指定的flag
+	fmode_t			f_mode; // 读写模式：open的mod_t mode参数
+	struct mutex		f_pos_lock; 
+	loff_t			f_pos;  // 当前文件指针位置
+	struct fown_struct	f_owner; // 该结构的作用是通过信号进行I/O时间通知的数据。
 	const struct cred	*f_cred;
-	struct file_ra_state	f_ra;
+	struct file_ra_state	f_ra; // 文件预读相关
 
-	u64			f_version;
+	u64			f_version; // 记录文件的版本号，每次使用之后递增
 #ifdef CONFIG_SECURITY
 	void			*f_security;
 #endif
 	/* needed for tty driver, and maybe others */
-	void			*private_data;
+	void			*private_data;  //使用这个成员来指向分配的数据
 
 #ifdef CONFIG_EPOLL
 	/* Used by fs/eventpoll.c to link all the hooks to this file */
