@@ -146,6 +146,7 @@ config ARCH_MMAP_RND_BITS_MIN
 
 # max bits determined by the following formula:
 #  VA_BITS - PAGE_SHIFT - 3
+# 64位的地址线并没有全部用来做物理寻址 虚拟地址的最大宽度可配置
 config ARCH_MMAP_RND_BITS_MAX
        default 19 if ARM64_VA_BITS=36
        default 24 if ARM64_VA_BITS=39
