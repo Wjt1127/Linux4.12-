@@ -303,9 +303,13 @@ struct vm_area_struct {
 
 	/* Second cache line starts here. */
 
-	struct mm_struct *vm_mm;	/* The address space we belong to. */
+	/*
+	 *	task_struct --> mm_struct --> vm_area_struct
+	 *	进程描述符	  内存描述符	  虚拟内存的一块域(完整的域以链表的形式连接起来)
+	 */
+	struct mm_struct *vm_mm;	/* 所属的内存描述符 */
 	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
-	unsigned long vm_flags;		/* Flags, see mm.h. */
+	unsigned long vm_flags;		/* 标识集，例如VM_READ等, see mm.h. */
 
 	/*
 	 * For areas with an address space and backing store,
@@ -330,9 +334,8 @@ struct vm_area_struct {
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */
-	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
-					   units */
-	struct file * vm_file;		/* File we map to (can be NULL). */
+	unsigned long vm_pgoff;		/* 映射文件的偏移量，以PAGE_SIZE为单位 */
+	struct file * vm_file;		/* 映射的文件，没有则为NULL */
 	void * vm_private_data;		/* was vm_pte (shared mem) */
 
 #ifndef CONFIG_MMU
