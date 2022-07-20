@@ -374,15 +374,33 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned copied,
 				struct page *page, void *fsdata);
 
+/* 一个address_space管理了一个文件在内存中缓存的所有pages。
+ * 每个进程打开一个文件的时候，都会生成一个表示这个文件的struct file，
+ * 但是文件的struct inode只有一个，inode才是文件的唯一标识，
+ * 指向address_space的指针就是内嵌在inode结构体中的。
+ * 在page cache中，每个page都有对应的文件，这个文件就是这个page的owner，
+ * address_space将属于同一owner的pages联系起来，
+ * 将这些pages的操作方法与文件所属的文件系统联系起来。
+ */
 struct address_space {
+	/* host指向address_space对应文件的inode */
 	struct inode		*host;		/* owner: inode, block_device */
+
+	/* address_space中的page cache之前一直是用radix tree的数据结构组织的，
+	 * tree_lock是访问这个radix tree的spinlcok（现在已换成xarray） 
+	 */
 	struct radix_tree_root	page_tree;	/* radix tree of all pages */
 	spinlock_t		tree_lock;	/* and lock protecting it */
+
+	/* i_mmap是管理address_space所属文件的多个VMAs映射的，
+	 * 用rbtree的数据结构组织，
+	 * i_mmap_lock是访问这个red-black tree的spinlcok*/
 	atomic_t		i_mmap_writable;/* count VM_SHARED mappings */
 	struct rb_root		i_mmap;		/* tree of private and shared mappings */
 	struct rw_semaphore	i_mmap_rwsem;	/* protect tree, count, list */
+
 	/* Protected by tree_lock together with the radix tree */
-	unsigned long		nrpages;	/* number of total pages */
+	unsigned long		nrpages;	/* address_space中含有的page frames的总数 */
 	/* number of shadow or DAX exceptional entries */
 	unsigned long		nrexceptional;
 	pgoff_t			writeback_index;/* writeback starts here */

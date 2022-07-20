@@ -39,6 +39,10 @@ struct mem_cgroup;
  */
 struct page {
 	/* First double word block */
+
+	/* flags表示page frame的状态或者属性，
+	 * 包括和内存回收相关的
+	 * PG_active, PG_dirty, PG_writeback, PG_reserved, PG_locked等 */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	union {
@@ -56,6 +60,7 @@ struct page {
 
 	/* Second double word */
 	union {
+		/* index表示该page在文件内的offset（以page size为单位） */
 		pgoff_t index;		/* Our offset within mapping. */
 		void *freelist;		/* sl[aou]b first free object */
 		/* page_deferred_list().prev	-- second tail page */
