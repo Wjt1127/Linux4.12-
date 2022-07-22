@@ -807,6 +807,7 @@ static void delete_vma(struct mm_struct *mm, struct vm_area_struct *vma)
 /*
  * look up the first VMA in which addr resides, NULL if none
  * - should be called with mm->mmap_sem at least held readlocked
+ * 在mm中查找包含 addr 的 vma 
  */
 struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 {
@@ -820,6 +821,7 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	/* trawl the list (there may be multiple mappings in which addr
 	 * resides) */
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
+		//如果查找过程中 vm_start大于 addr 那么后续的都不用判断了
 		if (vma->vm_start > addr)
 			return NULL;
 		if (vma->vm_end > addr) {
