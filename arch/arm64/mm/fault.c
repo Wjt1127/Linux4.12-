@@ -289,12 +289,13 @@ static int __do_page_fault(struct mm_struct *mm, unsigned long addr,
 	struct vm_area_struct *vma;
 	int fault;
 
+	// 查找用红黑树
 	vma = find_vma(mm, addr);
 	fault = VM_FAULT_BADMAP;
-	if (unlikely(!vma))
+	if (unlikely(!vma)) //如果没有找到 vma
 		goto out;
-	if (unlikely(vma->vm_start > addr))
-		goto check_stack;
+	if (unlikely(vma->vm_start > addr)) //如果addr 比 vma的起始地址大
+		goto check_stack;  //再做处理
 
 	/*
 	 * Ok, we have a good vm_area for this memory access, so we can handle
@@ -305,11 +306,13 @@ good_area:
 	 * Check that the permissions on the VMA allow for the fault which
 	 * occurred.
 	 */
+	// 没有权限访问这个虚拟内存区域 vma
 	if (!(vma->vm_flags & vm_flags)) {
 		fault = VM_FAULT_BADACCESS;
 		goto out;
 	}
 
+	//handle_mm_fault 处理用户空间的也错误异常，该函数是所有处理器架构共用的部分
 	return handle_mm_fault(vma, addr & PAGE_MASK, mm_flags);
 
 check_stack:
@@ -342,16 +345,20 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	/*
 	 * If we're in an interrupt or have no user context, we must not take
 	 * the fault.
+	 * 禁止执行也错误处理程序 或 处于原子上下文 
+	 * 或 当前进程是内核线程(内核线程的 mm 为 NULL)
 	 */
 	if (faulthandler_disabled() || !mm)
-		goto no_context;
+		goto no_context; //就是调用_do_kernel_fault 处理内核模式生成的页错误异常
 
-	if (user_mode(regs))
+	if (user_mode(regs))  //如果是用户模式的异常
 		mm_flags |= FAULT_FLAG_USER;
 
 	if (is_el0_instruction_abort(esr)) {
 		vm_flags = VM_EXEC;
-	} else if ((esr & ESR_ELx_WNR) && !(esr & ESR_ELx_CM)) {
+	}
+	/* 如果是写数据时生成的异常 */ 
+	else if ((esr & ESR_ELx_WNR) && !(esr & ESR_ELx_CM)) {
 		vm_flags = VM_WRITE;
 		mm_flags |= FAULT_FLAG_WRITE;
 	}

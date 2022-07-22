@@ -3662,6 +3662,7 @@ static int handle_pte_fault(struct vm_fault *vmf)
 {
 	pte_t entry;
 
+	//如果在pmd目录是空表项 说明直接页表不存在 那么把 vmf->pte 设置为 NULL
 	if (unlikely(pmd_none(*vmf->pmd))) {
 		/*
 		 * Leave __pte_alloc() until later: because vm_ops->fault may
@@ -3670,7 +3671,7 @@ static int handle_pte_fault(struct vm_fault *vmf)
 		 * concurrent faults and from rmap lookups.
 		 */
 		vmf->pte = NULL;
-	} else {
+	} else { //直接页表存在
 		/* See comment in pte_alloc_one_map() */
 		if (pmd_devmap_trans_unstable(vmf->pmd))
 			return 0;
@@ -3680,7 +3681,9 @@ static int handle_pte_fault(struct vm_fault *vmf)
 		 * mmap_sem read mode and khugepaged takes it in write mode.
 		 * So now it's safe to run pte_offset_map().
 		 */
+		//vmf->pte 存放表项的地址
 		vmf->pte = pte_offset_map(vmf->pmd, vmf->address);
+		//vmf->orig_pte 存放页表项的值
 		vmf->orig_pte = *vmf->pte;
 
 		/*
@@ -3692,51 +3695,79 @@ static int handle_pte_fault(struct vm_fault *vmf)
 		 * ptl lock held. So here a barrier will do.
 		 */
 		barrier();
+		//如果页表项为空表项 那么也没必要存页表项的地址 直接设置为NULL
 		if (pte_none(vmf->orig_pte)) {
 			pte_unmap(vmf->pte);
 			vmf->pte = NULL;
 		}
 	}
 
+	// 如果也表项不存在(直接页表不存在或页表项为空)
 	if (!vmf->pte) {
+		//如果是私有匿名映射
 		if (vma_is_anonymous(vmf->vma))
 			return do_anonymous_page(vmf);
-		else
+		else /* 如果是文件映射或者共享匿名映射
+			 * 内核使用共享文件映射实现共享匿名映射
+			 * 区别在于文件是内核创建的内部文件 进程不可见
+			 */
 			return do_fault(vmf);
 	}
 
+	// 如果页表存在 但是也不再物理内存中 说明页被换出到交换区
 	if (!pte_present(vmf->orig_pte))
-		return do_swap_page(vmf);
+		return do_swap_page(vmf); //调用 do_swap_page 将页从交换区读到内存中
 
 	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
 		return do_numa_page(vmf);
 
+	/* 一下处理页表项存在 且页在物理内存中的情况 */
+	/* 调用 pte_lockptr 获得页表锁的地址 页表锁有两种实现方式
+	 * 粗粒度的实现 一个进程一个页表锁
+	 * 细粒度的实现 一个页表一个锁
+	 */
 	vmf->ptl = pte_lockptr(vmf->vma->vm_mm, vmf->pmd);
-	spin_lock(vmf->ptl);
+	spin_lock(vmf->ptl);  //锁住页表
 	entry = vmf->orig_pte;
+	
+	/* 再次读页表项的值 如果和之前没锁住的时候的值不同 
+	 * 说明有其他处理器可能在修改同一个页表项
+	 * 那么当前处理器只需要等着使用其他处理器设置的页表项 没必要再进行页错误处理
+	 */ 
 	if (unlikely(!pte_same(*vmf->pte, entry)))
 		goto unlock;
+
+	/* 如果页错误异常是由写操作触发的 */
 	if (vmf->flags & FAULT_FLAG_WRITE) {
-		if (!pte_write(entry))
-			return do_wp_page(vmf);
-		entry = pte_mkdirty(entry);
+		/* 页表项没有设置写权限 那么调用do_wp_page 执行写时复制 */
+		if (!pte_write(entry)) 
+			return do_wp_page(vmf);  // do_wp_page 进行写时复制
+		entry = pte_mkdirty(entry); /* 如果有写权限 那么设置页表项的脏位标记 */
 	}
+
+	/* 设置页表项的访问标志 表示页刚刚被访问过 */ 
 	entry = pte_mkyoung(entry);
+
+	/* 设置页表项 */
 	if (ptep_set_access_flags(vmf->vma, vmf->address, vmf->pte, entry,
 				vmf->flags & FAULT_FLAG_WRITE)) {
+		/* 如果页表项发生变化(设置的值和之前的值不一样) 
+		   那么调用update_mmu_cache 更新mmu的页表缓存 */
 		update_mmu_cache(vmf->vma, vmf->address, vmf->pte);
-	} else {
+	} else { //如果设置页表项 但是没有发生变化
 		/*
 		 * This is needed only for protection faults but the arch code
 		 * is not yet telling us if this is a protection fault or not.
 		 * This still avoids useless tlb flushes for .text page faults
 		 * with threads.
 		 */
-		if (vmf->flags & FAULT_FLAG_WRITE)
+		if (vmf->flags & FAULT_FLAG_WRITE) /* page fault是由写操作触发的
+			* 说明page fault可能是TLB表项和页表项不一致导致的 那么使TLB表项失效
+			*/
 			flush_tlb_fix_spurious_fault(vmf->vma, vmf->address);
 	}
 unlock:
-	pte_unmap_unlock(vmf->pte, vmf->ptl);
+	pte_unmap_unlock(vmf->pte, vmf->ptl);  /* 释放锁 */
 	return 0;
 }
 
@@ -3761,11 +3792,13 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	p4d_t *p4d;
 	int ret;
 
-	pgd = pgd_offset(mm, address);
-	p4d = p4d_alloc(mm, pgd, address);
+	pgd = pgd_offset(mm, address); //在页全局目录中查找虚拟地址对应的表项
+	//在页四级目录中查找虚拟地址对应的表项，如果不存在p4d则先创建
+	p4d = p4d_alloc(mm, pgd, address); 
 	if (!p4d)
 		return VM_FAULT_OOM;
-
+	
+	//在pud中查找虚拟地址对应的表项 如果pud不存在，则先创建pud
 	vmf.pud = pud_alloc(mm, p4d, address);
 	if (!vmf.pud)
 		return VM_FAULT_OOM;
@@ -3793,6 +3826,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		}
 	}
 
+	//在pmd中查找虚拟地址对应的表项 如果pmd不存在，则先创建pmd
 	vmf.pmd = pmd_alloc(mm, vmf.pud, address);
 	if (!vmf.pmd)
 		return VM_FAULT_OOM;
@@ -3820,6 +3854,7 @@ static int __handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 		}
 	}
 
+	//到达页表 调用handle_pte_fault来处理
 	return handle_pte_fault(&vmf);
 }
 
@@ -3854,9 +3889,10 @@ int handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 					    flags & FAULT_FLAG_REMOTE))
 		return VM_FAULT_SIGSEGV;
 
+	//如果虚拟内存区域使用标准巨型页，调用hugetlb_fault做处理
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
-	else
+	else //如果做普通页的错误处理
 		ret = __handle_mm_fault(vma, address, flags);
 
 	if (flags & FAULT_FLAG_USER) {
