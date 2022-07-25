@@ -3328,6 +3328,11 @@ again:
 /*
  * __schedule() is the main scheduler function.
  *
+ * __schedule
+ * 	->context_switch
+ * 	->switch_mm_irqs_off   //进程地址空间切换
+ * 	->switch_to //处理器状态切换
+ * 
  * The main means of driving the scheduler and thus entering this function are:
  *
  *   1. Explicit blocking: mutex, semaphore, waitqueue, etc.

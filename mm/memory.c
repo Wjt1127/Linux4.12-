@@ -2866,7 +2866,9 @@ static int do_anonymous_page(struct vm_fault *vmf)
 	struct page *page;
 	pte_t entry;
 
-	/* File mapping without ->vm_ops ? */
+	/* 如果是共享的匿名映射 但是虚拟内存区域没有提供内存操作集合
+	 * (vm_area_struct.vm_ops)，那么返回错误号VM_FAULT_SIGBUS
+	 */
 	if (vma->vm_flags & VM_SHARED)
 		return VM_FAULT_SIGBUS;
 
@@ -2880,9 +2882,10 @@ static int do_anonymous_page(struct vm_fault *vmf)
 	 *
 	 * Here we only have down_read(mmap_sem).
 	 */
+	/* 如果直接页表不存在 直接分配页表 */
 	if (pte_alloc(vma->vm_mm, vmf->pmd, vmf->address))
 		return VM_FAULT_OOM;
-
+	
 	/* See the comment in pte_alloc_one_map() */
 	if (unlikely(pmd_trans_unstable(vmf->pmd)))
 		return 0;
@@ -3705,6 +3708,7 @@ static int handle_pte_fault(struct vm_fault *vmf)
 	// 如果也表项不存在(直接页表不存在或页表项为空)
 	if (!vmf->pte) {
 		//如果是私有匿名映射
+		/* 匿名页：用户线程中的stack and heap, which means no file back up. */
 		if (vma_is_anonymous(vmf->vma))
 			return do_anonymous_page(vmf);
 		else /* 如果是文件映射或者共享匿名映射
