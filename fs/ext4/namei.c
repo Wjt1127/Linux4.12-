@@ -3843,7 +3843,7 @@ static int ext4_rename2(struct inode *old_dir, struct dentry *old_dentry,
  * directories can handle most operations...
  */
 const struct inode_operations ext4_dir_inode_operations = {
-	.create		= ext4_create,
+	.create		= ext4_create,  //是ext4文件目录的创建主入口
 	.lookup		= ext4_lookup,
 	.link		= ext4_link,
 	.unlink		= ext4_unlink,
