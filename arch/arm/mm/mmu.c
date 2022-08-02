@@ -1252,14 +1252,14 @@ static inline void prepare_page_table(void)
 	 * Clear out all the mappings below the kernel image.
 	 */
 	for (addr = 0; addr < MODULES_VADDR; addr += PMD_SIZE)
-		pmd_clear(pmd_off_k(addr));
+		pmd_clear(pmd_off_k(addr));  //清除0x0 ~ MODULES_VADDR之间的pmd
 
 #ifdef CONFIG_XIP_KERNEL
 	/* The XIP kernel is mapped in the module area -- skip over it */
 	addr = ((unsigned long)_exiprom + PMD_SIZE - 1) & PMD_MASK;
 #endif
 	for ( ; addr < PAGE_OFFSET; addr += PMD_SIZE)
-		pmd_clear(pmd_off_k(addr));
+		pmd_clear(pmd_off_k(addr)); //MODULES_VADDR ~ PAGE_OFFSET之间清除pmd
 
 	/*
 	 * Find the end of the first block of lowmem.
@@ -1274,7 +1274,7 @@ static inline void prepare_page_table(void)
 	 */
 	for (addr = __phys_to_virt(end);
 	     addr < VMALLOC_START; addr += PMD_SIZE)
-		pmd_clear(pmd_off_k(addr));
+		pmd_clear(pmd_off_k(addr));//清除arm_lowmem_limit ~ VMALLOC_START之间的pmd
 }
 
 #ifdef CONFIG_ARM_LPAE
@@ -1446,6 +1446,7 @@ static void __init map_lowmem(void)
 		if (start >= end)
 			break;
 
+		//映射kernel image区域
 		if (end < kernel_x_start) {
 			map.pfn = __phys_to_pfn(start);
 			map.virtual = __phys_to_virt(start);
