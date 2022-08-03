@@ -1412,7 +1412,7 @@ choice
 
 	  If you are not absolutely sure what you are doing, leave this
 	  option alone!
-
+	# 虚拟地址空间划分
 	config VMSPLIT_3G
 		bool "3G/1G user/kernel split"
 	config VMSPLIT_3G_OPT
