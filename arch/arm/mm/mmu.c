@@ -890,11 +890,11 @@ static void __init create_36bit_mapping(struct mm_struct *mm,
 	 */
 	phys |= (((md->pfn >> (32 - PAGE_SHIFT)) & 0xF) << 20);
 
-	pgd = pgd_offset(mm, addr);
+	pgd = pgd_offset(mm, addr);  //获得所属的PGD项
 	end = addr + length;
 	do {
-		pud_t *pud = pud_offset(pgd, addr);
-		pmd_t *pmd = pmd_offset(pud, addr);
+		pud_t *pud = pud_offset(pgd, addr);  //通过pgd获取pud
+		pmd_t *pmd = pmd_offset(pud, addr);  //通过pud获取pmd
 		int i;
 
 		for (i = 0; i < 16; i++)
