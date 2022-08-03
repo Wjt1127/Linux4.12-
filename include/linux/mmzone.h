@@ -350,8 +350,12 @@ enum zone_type {
 struct zone {
 	/* Read-mostly fields */
 
-	/* zone watermarks, access with *_wmark_pages(zone) macros */
+	/* zone watermarks, access with *_wmark_pages(zone) macros 
+	 * zone对应的watermark，内核会根据当使用的物理内存达到不同的watermark，
+	 * 会做出不同的处理，比如回收内存，以释放出足够的物理空间以及有可能触发OOM等
+	*/
 	unsigned long watermark[NR_WMARK];
+
 
 	unsigned long nr_reserved_highatomic;
 
@@ -364,13 +368,13 @@ struct zone {
 	 * recalculated at runtime if the sysctl_lowmem_reserve_ratio sysctl
 	 * changes.
 	 */
-	long lowmem_reserve[MAX_NR_ZONES];
+	long lowmem_reserve[MAX_NR_ZONES]; /* 保留的物理内存 */
 
 #ifdef CONFIG_NUMA
 	int node;
 #endif
-	struct pglist_data	*zone_pgdat;
-	struct per_cpu_pageset __percpu *pageset;
+	struct pglist_data	*zone_pgdat; /* 指向的内存节点 */
+	struct per_cpu_pageset __percpu *pageset; /*用用维护维护上一系列页面，以减少旋锁的争用 */
 
 #ifndef CONFIG_SPARSEMEM
 	/*
@@ -381,7 +385,7 @@ struct zone {
 #endif /* CONFIG_SPARSEMEM */
 
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
-	unsigned long		zone_start_pfn;
+	unsigned long		zone_start_pfn;/* zone 中开始页面的页帧号 */
 
 	/*
 	 * spanned_pages is the total pages spanned by the zone, including
@@ -424,9 +428,9 @@ struct zone {
 	 * adjust_managed_page_count() should be used instead of directly
 	 * touching zone->managed_pages and totalram_pages.
 	 */
-	unsigned long		managed_pages;
-	unsigned long		spanned_pages;
-	unsigned long		present_pages;
+	unsigned long		managed_pages; /* zone 中被伙伴系统管理的页面数量 */
+	unsigned long		spanned_pages; /* zone 包含的页面数量 */
+	unsigned long		present_pages; /* zone 里实际管理的页面数量。对一些体系结构来说，其值和 spanned_pages 相等 */
 
 	const char		*name;
 
@@ -450,13 +454,13 @@ struct zone {
 	ZONE_PADDING(_pad1_)
 
 	/* free areas of different sizes */
-	struct free_area	free_area[MAX_ORDER];
+	struct free_area	free_area[MAX_ORDER];  /* 管理空闲区域的数组，包含管理链表等 */
 
 	/* zone flags, see below */
 	unsigned long		flags;
 
 	/* Primarily protects free_area */
-	spinlock_t		lock;
+	spinlock_t		lock; /* 并行访问时用于对 zone 保护的自旋锁 */
 
 	/* Write-intensive fields used by compaction and vmstats. */
 	ZONE_PADDING(_pad2_)
@@ -495,7 +499,7 @@ struct zone {
 
 	ZONE_PADDING(_pad3_)
 	/* Zone statistics */
-	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
+	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS]; /* zone 计数 */
 } ____cacheline_internodealigned_in_smp;
 
 enum pgdat_flags {
@@ -670,7 +674,7 @@ typedef struct pglist_data {
 
 	/* Write-intensive fields used by page reclaim */
 	ZONE_PADDING(_pad1_)
-	spinlock_t		lru_lock;
+	spinlock_t		lru_lock; /* 用于对 zone 中 LRU 链表并行访问时进行保护的自旋锁 */
 
 #ifdef CONFIG_DEFERRED_STRUCT_PAGE_INIT
 	/*
@@ -688,7 +692,7 @@ typedef struct pglist_data {
 #endif
 
 	/* Fields commonly accessed by the page reclaim scanner */
-	struct lruvec		lruvec;
+	struct lruvec		lruvec; /* LRU 链表集合 */
 
 	/*
 	 * The target ratio of ACTIVE_ANON to INACTIVE_ANON pages on
