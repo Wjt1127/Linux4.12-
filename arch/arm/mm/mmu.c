@@ -744,9 +744,12 @@ static pte_t * __init arm_pte_alloc(pmd_t *pmd, unsigned long addr,
 				unsigned long prot,
 				void *(*alloc)(unsigned long sz))
 {
-	if (pmd_none(*pmd)) {
-		pte_t *pte = alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
-		__pmd_populate(pmd, __pa(pte), prot);
+	if (pmd_none(*pmd)) {  /* pmd_none检查pmd表项的内容 
+			* 如果为0 表示：PTE表没有建立 所以需要建立PTE表 
+			*/
+		//会分配 PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE 个PTE表
+		pte_t *pte = alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE); 
+		__pmd_populate(pmd, __pa(pte), prot); //把这个pte表的基地址填充到pmd中
 	}
 	BUG_ON(pmd_bad(*pmd));
 	return pte_offset_kernel(pmd, addr);
@@ -764,8 +767,9 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  void *(*alloc)(unsigned long sz),
 				  bool ng)
 {
-	pte_t *pte = arm_pte_alloc(pmd, addr, type->prot_l1, alloc);
+	pte_t *pte = arm_pte_alloc(pmd, addr, type->prot_l1, alloc); //首先检查存不存在相应的pte 如果不存在则要新建pte页表项
 	do {
+	/* 那么这个 while 循环是根据物理地址的 pfn 页帧号来生成新的 PTE 表项 最后设置到 ARM 硬件页表中*/
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)),
 			    ng ? PTE_EXT_NG : 0);
 		pfn++;
