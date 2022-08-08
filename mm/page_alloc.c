@@ -3955,11 +3955,15 @@ static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
 		struct alloc_context *ac, gfp_t *alloc_mask,
 		unsigned int *alloc_flags)
 {
+	/* gfp对应的zone,参考文档'如何根据gfp_flag找到对应的zone',
+	   内存分配的zoneidx一定小于等于该idx */
 	ac->high_zoneidx = gfp_zone(gfp_mask);
+	/* zone优先级搜索列表 */
 	ac->zonelist = zonelist;
 	ac->nodemask = nodemask;
+	/* 根据gfp找到迁移类型,gfp_flags的bit3-bit4表示migrate类型 */
 	ac->migratetype = gfpflags_to_migratetype(gfp_mask);
-
+	
 	if (cpusets_enabled()) {
 		*alloc_mask |= __GFP_HARDWALL;
 		if (!ac->nodemask)
@@ -3968,13 +3972,20 @@ static inline bool prepare_alloc_pages(gfp_t gfp_mask, unsigned int order,
 			*alloc_flags |= ALLOC_CPUSET;
 	}
 
+	/* 需要 CONFIG_TRACE_IRQFLAGS 和 CONFIG_PROVE_LOCKING 同时定义的时候，
+	   才起作用，否则为空函数 */
 	lockdep_trace_alloc(gfp_mask);
 
+	/* 如果申请页面传入的gfp_mask掩码携带__GFP_WAIT标识，表示允许页面申请时休眠，
+	 * 则会进入might_sleep_if()检查是否需要休眠等待以及重新调度
+	 */
 	might_sleep_if(gfp_mask & __GFP_DIRECT_RECLAIM);
 
+	/* 如果未设置CONFIG_FAIL_PAGE_ALLOC，则should_fail_alloc_page()返回false */
 	if (should_fail_alloc_page(gfp_mask, order))
 		return false;
 
+	/* 判断是否允许分配CMA区域内存，CMA用于分配连续的大块内存。*/
 	if (IS_ENABLED(CONFIG_CMA) && ac->migratetype == MIGRATE_MOVABLE)
 		*alloc_flags |= ALLOC_CMA;
 
@@ -3993,6 +4004,7 @@ static inline void finalise_ac(gfp_t gfp_mask,
 	 * also used as the starting point for the zonelist iterator. It
 	 * may get reset for allocations that ignore memory policies.
 	 */
+	/* 根据nodemask，找到合适的不大于high_zoneidx的内存管理区preferred_zone */
 	ac->preferred_zoneref = first_zones_zonelist(ac->zonelist,
 					ac->high_zoneidx, ac->nodemask);
 }
@@ -4000,26 +4012,45 @@ static inline void finalise_ac(gfp_t gfp_mask,
 /*
  * This is the 'heart' of the zoned buddy allocator.
  */
+/* 参数说明：
+ * gfp_t gfp_mask ：表示物理页的分配标志位
+ * unsigned int order ：表示物理页的阶数,  n 阶页块指的是 2^n 个连续的物理页
+ * struct zonelist *zonelist : 表示内存节点首选备用zone列表
+ * nodemask_t *nodemask : 表示可以分配物理页的内存节点,如果没有要求,可以设置为 NULL
+ */
+/*
+ * __alloc_pages_nodemask()分配内存页面的关键函数是：
+ * get_page_from_freelist(快速路径分配)和__alloc_pages_slowpath(慢分配)，
+ * 快速分配就是直接从现有的内存中去分配，如果不成功，再去尝试慢速分配。
+ * 慢速分配会进行内存压缩，回收，然后再去尝试分配内存。
+ */
 struct page *
 __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 			struct zonelist *zonelist, nodemask_t *nodemask)
 {
 	struct page *page;
+	/* 分配标志，仅在低水位water mark及以上限制页面分配 */
 	unsigned int alloc_flags = ALLOC_WMARK_LOW;
 	gfp_t alloc_mask = gfp_mask; /* The gfp_t that was actually used for allocation */
+	
+	//用于存储函数间传递的参数，在以下的prepare_alloc_pages()中进行初始化
 	struct alloc_context ac = { };
 
 	gfp_mask &= gfp_allowed_mask;
+	/* 完成一些页面分配前的准备工作 */
 	if (!prepare_alloc_pages(gfp_mask, order, zonelist, nodemask, &ac, &alloc_mask, &alloc_flags))
 		return NULL;
 
+	/* Determine whether to spread dirty pages and what the first usable zone */
 	finalise_ac(gfp_mask, order, &ac);
 
-	/* First allocation attempt */
+	/* First allocation attempt (快速路径分配) */
 	page = get_page_from_freelist(alloc_mask, order, alloc_flags, &ac);
-	if (likely(page))
+	if (likely(page)) //分配成功
 		goto out;
 
+
+	/* 以下为 page 为NULL的执行 */
 	/*
 	 * Apply scoped allocation constraints. This is mainly about GFP_NOFS
 	 * resp. GFP_NOIO which has to be inherited for all allocation requests
@@ -4035,10 +4066,12 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	 */
 	if (unlikely(ac.nodemask != nodemask))
 		ac.nodemask = nodemask;
-
+	//慢分配
 	page = __alloc_pages_slowpath(alloc_mask, order, &ac);
 
 out:
+	/* 返回的page检查和系统当前环境检查 */
+	/* memcg_kmem_newpage_charge()与控制组群Cgroup相关 */
 	if (memcg_kmem_enabled() && (gfp_mask & __GFP_ACCOUNT) && page &&
 	    unlikely(memcg_kmem_charge(page, gfp_mask, order) != 0)) {
 		__free_pages(page, order);

@@ -15,8 +15,8 @@ struct vm_area_struct;
  */
 
 /* Plain integer GFP bitmasks. Do not use this directly. */
-#define ___GFP_DMA		0x01u
-#define ___GFP_HIGHMEM		0x02u
+#define ___GFP_DMA		0x01u    		//要求分配可用于DMA的内存
+#define ___GFP_HIGHMEM		0x02u	//分配的内存可以位于高端内存
 #define ___GFP_DMA32		0x04u
 #define ___GFP_MOVABLE		0x08u
 #define ___GFP_RECLAIMABLE	0x10u
@@ -24,10 +24,11 @@ struct vm_area_struct;
 #define ___GFP_IO		0x40u
 #define ___GFP_FS		0x80u
 #define ___GFP_COLD		0x100u
-#define ___GFP_NOWARN		0x200u
-#define ___GFP_REPEAT		0x400u
-#define ___GFP_NOFAIL		0x800u
-#define ___GFP_NORETRY		0x1000u
+#define ___GFP_NOWARN		0x200u	//当一个分配无法满足，阻止内核发出警告(使用printk )
+/* 告诉分配器当满足一个分配有困难时，如何动作 */
+#define ___GFP_REPEAT		0x400u	//表示努力再尝试一次，仍然可能失败
+#define ___GFP_NOFAIL		0x800u	//告诉分配器尽最大努力来满足要求，始终不返回失败
+#define ___GFP_NORETRY		0x1000u	//告知分配器如果无法满足请求，立即返回
 #define ___GFP_MEMALLOC		0x2000u
 #define ___GFP_COMP		0x4000u
 #define ___GFP_ZERO		0x8000u
@@ -452,6 +453,7 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
 	VM_BUG_ON(nid < 0 || nid >= MAX_NUMNODES);
 	VM_WARN_ON(!node_online(nid));
 
+	/* node_zonelist 用于获取node节点的zone管理区列表,按优先级顺序存储 */
 	return __alloc_pages(gfp_mask, order, node_zonelist(nid, gfp_mask));
 }
 
@@ -460,9 +462,18 @@ __alloc_pages_node(int nid, gfp_t gfp_mask, unsigned int order)
  * prefer the current CPU's closest node. Otherwise node must be valid and
  * online.
  */
+/* 参数说明：
+ * gfp_mask：是分配标志，内核分配内存有多种方式，该参数告诉内核如何分配
+ 	以及在哪分配所需的内存，内存分配最终总是调用__get_free_pages( )来实现，
+	这也是gfp_前缀的由来。
+ * order：指要分配/释放的物理页数，其取值为2的order次方个物理页数。
+ * 返回：返回page结构体指针，指向所分配的物理页中的第一个页，
+ 	如果分配不成功，则返回NULL。
+ */
 static inline struct page *alloc_pages_node(int nid, gfp_t gfp_mask,
 						unsigned int order)
 {
+	/* nid如无效，则会选择一个目前距离cpu最近的一个在线节点 */
 	if (nid == NUMA_NO_NODE)
 		nid = numa_mem_id();
 
@@ -483,6 +494,7 @@ extern struct page *alloc_pages_vma(gfp_t gfp_mask, int order,
 #define alloc_hugepage_vma(gfp_mask, vma, addr, order)	\
 	alloc_pages_vma(gfp_mask, order, vma, addr, numa_node_id(), true)
 #else
+/* numa_node_id()返回当前所在节点的id */
 #define alloc_pages(gfp_mask, order) \
 		alloc_pages_node(numa_node_id(), gfp_mask, order)
 #define alloc_pages_vma(gfp_mask, order, vma, addr, node, false)\

@@ -977,7 +977,7 @@ static void __init create_mapping(struct map_desc *md)
 			(long long)__pfn_to_phys((u64)md->pfn), md->virtual);
 	}
 
-	__create_mapping(&init_mm, md, early_alloc, false);
+	__create_mapping(&init_mm, md, early_alloc, false); //通过 init_mm 来获取PGD基地址
 }
 
 void __init create_mapping_late(struct mm_struct *mm, struct map_desc *md,
