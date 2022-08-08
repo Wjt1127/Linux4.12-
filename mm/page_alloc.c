@@ -3026,11 +3026,20 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 	 * Scan zonelist, looking for a zone with enough free.
 	 * See also __cpuset_node_allowed() comment in kernel/cpuset.c.
 	 */
+	/* 
+	 * 该for循环遍历备用列表所有的内存区域，查找到一个合适的空闲内存块
+	 * 即遍历 ac->zonelist 中不大于 ac->high_zoneidx 的所有zone
+	 */
 	for_next_zone_zonelist_nodemask(zone, z, ac->zonelist, ac->high_zoneidx,
 								ac->nodemask) {
 		struct page *page;
 		unsigned long mark;
-
+		/*
+		 *（1）__cpuset_zone_allowed_softwall是一个辅助函数,
+		 	用于检查给定内存域是否属于该进程允许运行的 CPU
+		 *（2）如果 使能cpuset 而且设置了ALLOC_CPUSET标志就检查
+		 	看当前CPU是否允许在内存域zone所在结点中分配内存
+		 */
 		if (cpusets_enabled() &&
 			(alloc_flags & ALLOC_CPUSET) &&
 			!__cpuset_zone_allowed(zone, gfp_mask))
@@ -3054,26 +3063,45 @@ get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 		 * will require awareness of nodes in the
 		 * dirty-throttling and the flusher threads.
 		 */
+		/* ac->spread_dirty_pages不为零标识本次内存分配用于写，可能增加脏页数 */
 		if (ac->spread_dirty_pages) {
+			/* 如果当前zone所在节点被标记为脏页超标就跳过 */
 			if (last_pgdat_dirty_limit == zone->zone_pgdat)
 				continue;
 
+			/* 检查zone所在节点脏页数是否超过限制 */
 			if (!node_dirty_ok(zone->zone_pgdat)) {
 				last_pgdat_dirty_limit = zone->zone_pgdat;
 				continue;
 			}
 		}
 
+		/*
+		 * 接下来检查所遍历到的内存域是否有足够的空闲页，
+		 * 空闲内存页中是否具有大小为2^order大小的连续内存块。
+		 * 如果没有足够的空闲页或者没有连续内存块可满足分配请求(两者出现任意一个)，
+		 * 则将循环进行到备用列表中的下一个内存域，作同样的检查. 
+		 * 直到找到一个合适的空闲且连续的内存页块, 
+		 * 才会进行try_this_node进行内存分配
+		 */
+		
+		/* 获取分配所用水印 watermark */
 		mark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
+		/* 检查zone中空闲内存是否在水印之上 */
 		if (!zone_watermark_fast(zone, order, mark,
 				       ac_classzone_idx(ac), alloc_flags)) {
 			int ret;
 
 			/* Checked here to keep the fast path fast */
 			BUILD_BUG_ON(ALLOC_NO_WATERMARKS < NR_WMARK);
+			/* 如果设置的是 无忽略水印标志 就尝试从当前选定zone中分配内存 */
 			if (alloc_flags & ALLOC_NO_WATERMARKS)
 				goto try_this_zone;
 
+			/* 程序运行到此处说明空闲页在水印之下，接下来需要做内存回收，但有两种特殊情况:
+			 * 1. 如果系统不允许内存回收；
+			 * 2. 如果目标zone和当前zone的distance不小于RECLAIM_DISTANCE
+			 */
 			if (node_reclaim_mode == 0 ||
 			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone))
 				continue;
