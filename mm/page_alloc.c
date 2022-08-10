@@ -3014,6 +3014,11 @@ static bool zone_allows_reclaim(struct zone *local_zone, struct zone *zone)
  * get_page_from_freelist goes through the zonelist trying to allocate
  * a page.
  */
+/* 
+ * get_page_from_freelist()最先用于尝试页面分配，它通过标志集和分配阶（order）
+ * 来判断是否能进行请求的内存分配操作，如果分配失败的情况下，则会进一步调用
+ * __alloc_pages_slowpath()
+ */
 static struct page *
 get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
 						const struct alloc_context *ac)
