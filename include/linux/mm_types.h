@@ -365,14 +365,16 @@ struct core_state {
 
 struct kioctx_table;
 struct mm_struct {
-	struct vm_area_struct *mmap;		/* list of VMAs */
+	struct vm_area_struct *mmap;		/* 指向线性区对象的链表头 */
 	struct rb_root mm_rb;
-	u32 vmacache_seqnum;                   /* per-thread vmacache */
+	u32 vmacache_seqnum;                   /* 每一个线程的vmacache序列号 */
 #ifdef CONFIG_MMU
+	/* 在进程地址空间忠搜索有效线性地址区间的方法 */ 
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
 #endif
+	/* 标识第一个分配的匿名线性区或文件内存映射的线性地址 */
 	unsigned long mmap_base;		/* base of mmap area */
 	unsigned long mmap_legacy_base;         /* base of mmap area in bottom-up allocations */
 #ifdef CONFIG_HAVE_ARCH_COMPAT_MMAP_BASES
@@ -382,7 +384,7 @@ struct mm_struct {
 #endif
 	unsigned long task_size;		/* size of task vm space */
 	unsigned long highest_vm_end;		/* highest vma end address */
-	pgd_t * pgd;
+	pgd_t * pgd;	/* 指向页全局目录PGD的指针 */
 
 	/**
 	 * @mm_users: The number of users including userspace.
@@ -404,33 +406,43 @@ struct mm_struct {
 	 */
 	atomic_t mm_count;
 
-	atomic_long_t nr_ptes;			/* PTE page table pages */
+	atomic_long_t nr_ptes;			/* PTE页表所在的页 */
 #if CONFIG_PGTABLE_LEVELS > 2
 	atomic_long_t nr_pmds;			/* PMD page table pages */
 #endif
 	int map_count;				/* number of VMAs */
 
 	spinlock_t page_table_lock;		/* Protects page tables and some counters */
-	struct rw_semaphore mmap_sem;
+	struct rw_semaphore mmap_sem;		/* 线性区的读/写信号量 */
 
 	struct list_head mmlist;		/* List of maybe swapped mm's.	These are globally strung
 						 * together off init_mm.mmlist, and are protected
 						 * by mmlist_lock
 						 */
 
-
+	
 	unsigned long hiwater_rss;	/* High-watermark of RSS usage */
 	unsigned long hiwater_vm;	/* High-water virtual memory usage */
 
+	/* total_vm指进程地址空间的大小（页数）, locked_vm指“锁住”而不能换出的页的个数，
+      * shared_vm指共享文件内存映射中的页数，exec_vm指可执行内存映射中的页数
+	 */
 	unsigned long total_vm;		/* Total pages mapped */
 	unsigned long locked_vm;	/* Pages that have PG_mlocked set */
 	unsigned long pinned_vm;	/* Refcount permanently increased */
 	unsigned long data_vm;		/* VM_WRITE & ~VM_SHARED & ~VM_STACK */
 	unsigned long exec_vm;		/* VM_EXEC & ~VM_WRITE & ~VM_STACK */
-	unsigned long stack_vm;		/* VM_STACK */
+	unsigned long stack_vm;		/* pages of VM_STACK */
 	unsigned long def_flags;
+
+	/* start_code指可执行的起始地址，end_code指可执行代码的最后地址，start_data
+      * 指已初始化数据的起始地址，end_data指已初始化数据的最后地址
+	 */
 	unsigned long start_code, end_code, start_data, end_data;
+/* start_brk指堆的起始地址，brk指堆的当前最后地址，start_stack指用户态堆栈的起始地址 */
 	unsigned long start_brk, brk, start_stack;
+	/* arg_start指命令行参数起始地址，arg_end指命令行参数的最后地址，
+      * env_start指环境变量的起始地址，env_end指环境变量的最后地址*/
 	unsigned long arg_start, arg_end, env_start, env_end;
 
 	unsigned long saved_auxv[AT_VECTOR_SIZE]; /* for /proc/PID/auxv */

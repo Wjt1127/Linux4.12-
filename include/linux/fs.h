@@ -1311,27 +1311,33 @@ struct sb_writers {
 };
 
 struct super_block {
+	/* list_head 是一个双向循环链表，把所有的super_block连接起来，一个super_block代表
+	 * 一个在linux上的文件系统，这个list上边的就是所有的在linux上记录的文件系统 
+	 */
 	struct list_head	s_list;		/* Keep this first */
 	dev_t			s_dev;		/* search index; _not_ kdev_t */
-	unsigned char		s_blocksize_bits;
-	unsigned long		s_blocksize;
+	unsigned char		s_blocksize_bits;	/* 该文件系统的块大小位数 */
+	unsigned long		s_blocksize;	/* 该文件系统的块大小 */
 	loff_t			s_maxbytes;	/* Max file size */
-	struct file_system_type	*s_type;
-	const struct super_operations	*s_op;
-	const struct dquot_operations	*dq_op;
-	const struct quotactl_ops	*s_qcop;
-	const struct export_operations *s_export_op;
-	unsigned long		s_flags;
+
+	/* s_type 这个结构体是文件系统类型的结构体，
+	 * 里边是对文件系统的细节描述，每一个文件系统只有一个这个结构体 */
+	struct file_system_type	*s_type;	/* 指向file_system_type的指针 */
+	const struct super_operations	*s_op;	/* super_block的操作函数集合 */
+	const struct dquot_operations	*dq_op;	/* 文件系统的配额操作函数集合 */
+	const struct quotactl_ops	*s_qcop;	/* 文件系统的配额控制操作函数集合 */
+	const struct export_operations *s_export_op;	/* 网络文件系统的导出操作函数集合 */
+	unsigned long		s_flags;	/* 文件系统的超级块的状态位 */
 	unsigned long		s_iflags;	/* internal SB_I_* flags */
-	unsigned long		s_magic;
-	struct dentry		*s_root;
-	struct rw_semaphore	s_umount;
-	int			s_count;
-	atomic_t		s_active;
+	unsigned long		s_magic;	/* 每一个超级块有一个唯一的魔术数标记 */
+	struct dentry		*s_root;	/* 超级块内的指向根目录的dentry结构体 */
+	struct rw_semaphore	s_umount;	/* 文件系统卸载时候用到的读写信号量 */
+	int			s_count;	/* 引用计数 */
+	atomic_t		s_active;	/* 原子文件系统引用计数 */
 #ifdef CONFIG_SECURITY
 	void                    *s_security;
 #endif
-	const struct xattr_handler **s_xattr;
+	const struct xattr_handler **s_xattr;	/* 属性操作结构体 */
 
 	const struct fscrypt_operations	*s_cop;
 
@@ -1418,6 +1424,8 @@ struct super_block {
 
 	/* s_inode_list_lock protects s_inodes */
 	spinlock_t		s_inode_list_lock ____cacheline_aligned_in_smp;
+	
+	/* 所有的这个文件系统的inode结构体都在这个队列上 */
 	struct list_head	s_inodes;	/* all inodes */
 
 	spinlock_t		s_inode_wblist_lock;
