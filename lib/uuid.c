@@ -52,7 +52,7 @@ static void __uuid_gen_common(__u8 b[16])
 	/* reversion 0b10 */
 	b[8] = (b[8] & 0x3F) | 0x80;
 }
-
+ 
 void uuid_le_gen(uuid_le *lu)
 {
 	__uuid_gen_common(lu->b);

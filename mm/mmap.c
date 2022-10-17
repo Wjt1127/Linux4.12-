@@ -1398,7 +1398,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
 	/* file指针不为nullptr, 即从文件到虚拟空间的映射 */
 	if (file) {
-		struct inode *inode = file_inode(file);
+		struct inode *inode = file_inode(file); //获得该文件对应的inode
 		/*
            根据标志指定的map种类，把为文件设置的访问权考虑进去。
 		 如果所请求的内存映射是共享可写的，就要检查要映射的文件是为写入而打开的，
